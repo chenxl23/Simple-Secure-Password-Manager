@@ -6,7 +6,9 @@
 
 - **零知识证明架构**：所有数据均在本地使用主密码加密，任何云端或第三方都无法窥探。
 - **高强度加密**：采用 **AES-256 (Fernet)** 对称加密，密钥通过 **PBKDF2HMAC** (SHA256, 48万次迭代) 从主密码派生。
-- **现代 UI 界面**：基于 `ttkbootstrap` 构建，支持实时搜索、一键查看、修改和删除账号。
+- **极致现代 UI 界面**：基于 `CustomTkinter` 深度定制，采用全深色模式、磨砂感卡片布局 (Glassmorphism)、统计看板以及侧边栏导航，视觉效果拉满。
+- **动态 Logo 系统**：根据账号平台（如 Google, GitHub, Steam 等）自动匹配品牌色彩与图标。
+- **交互式体验**：支持整行点击选中、流畅的滚动区域以及沉浸式的弹窗设计。
 - **安全找回机制**：提供**安全恢复码 (Recovery Key)** 方案。即使忘记主密码，只要持有初始化时生成的恢复码，即可安全重置并找回数据。
 - **字段级加密**：仅对敏感的密码字段进行加密，保留平台名称和账号名以便快速搜索。
 
@@ -15,14 +17,14 @@
 为了方便用户，我们在桌面上准备了快捷批处理脚本：
 
 1. **第一步：安装依赖**  
-   双击 `安装依赖.bat`。它会自动检测你的 Python 环境并安装 `cryptography` 和 `ttkbootstrap` 库。
+   双击 `安装依赖.bat`。它会自动检测你的 Python 环境并安装 `cryptography` 和 `customtkinter` 库。
    
 2. **第二步：运行程序**  
    双击 `快捷启动.bat`。它将直接启动图形化界面。
 
 *如果你想手动运行：*
 ```bash
-pip install cryptography ttkbootstrap
+pip install cryptography customtkinter
 python password_manager.py
 ```
 
