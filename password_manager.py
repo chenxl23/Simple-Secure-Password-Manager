@@ -1,45 +1,41 @@
 import json
 import os
 import base64
+import gc
 import tkinter as tk
-from tkinter import messagebox, simpledialog
+from tkinter import messagebox
 import customtkinter as ctk
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-# ── 依赖安装提示 ──────────────────────────────────────────────
-# pip install customtkinter cryptography
-
 DATA_FILE = "my_passwords.json"
 
-# ── 颜色系统 ─────────────────────────────────────────────────
+# ── 字体与颜色系统 (macOS 浅色风格) ──────────────────────────────
+APP_FONT = "Microsoft YaHei"  # 全局统一无衬线字体，消除中英文割裂感
+
 COLORS = {
-    # 背景层
-    "bg_deep":        "#0f1628",   # 最深底色
-    "bg_sidebar":     "#141d35",   # 侧边栏
-    "bg_card":        "#1a2444",   # 卡片背景
-    "bg_card_hover":  "#1f2d55",   # 卡片悬停
-    "bg_card_sel":    "#1e3060",   # 卡片选中
-    "bg_input":       "#111827",   # 输入框
-    "bg_btn_sec":     "#1e2a45",   # 次级按钮
+    "bg_deep":        "#F5F5F7",   # 苹果经典浅灰底色
+    "bg_sidebar":     "#EAEBEE",   # 侧边栏微深灰
+    "bg_card":        "#FFFFFF",   # 卡片纯白背景
+    "bg_card_hover":  "#F2F2F7",   # 卡片悬停浅灰
+    "bg_card_sel":    "#E6F0FF",   # 选中时的浅蓝色背景
+    "bg_input":       "#FFFFFF",   # 输入框纯白
+    "bg_btn_sec":     "#E5E5EA",   # 次级按钮底色
 
-    # 强调色
-    "accent":         "#5b8fff",   # 主蓝
-    "accent_dark":    "#3d6fe8",
-    "accent2":        "#a78bfa",   # 紫色
-    "success":        "#34d399",   # 绿
-    "warning":        "#fbbf24",   # 琥珀
-    "danger":         "#f87171",   # 红
+    "accent":         "#007AFF",   # 苹果蓝
+    "accent_dark":    "#0056B3",
+    "accent2":        "#AF52DE",   # 苹果紫
+    "success":        "#34C759",   # 苹果绿
+    "warning":        "#FF9500",   # 苹果橙
+    "danger":         "#FF3B30",   # 苹果红
 
-    # 文字
-    "text_primary":   "#e8eaf6",
-    "text_secondary": "#7986a8",
-    "text_muted":     "#4a5578",
+    "text_primary":   "#1D1D1F",   # 主文本极深灰
+    "text_secondary": "#86868B",   # 次级文本浅灰
+    "text_muted":     "#A1A1A6",   # 暗纹提示灰
 
-    # 边框
-    "border":         "#243058",
-    "border_accent":  "#3d5a9e",
+    "border":         "#D1D1D6",   # 浅色边框线
+    "border_accent":  "#80BDFF",   # 蓝色强调边框
 }
 
 # ── 加密核心 ─────────────────────────────────────────────────
@@ -49,8 +45,7 @@ class CryptoCore:
         self.fernet = None
 
     def get_key_from_pwd(self, pwd: str, salt: bytes) -> bytes:
-        kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32,
-                         salt=salt, iterations=480000)
+        kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=480000)
         return base64.urlsafe_b64encode(kdf.derive(pwd.encode()))
 
     def set_key(self, key: bytes):
@@ -67,9 +62,8 @@ class CryptoCore:
         return self.fernet.decrypt(encrypted_text.encode()).decode()
 
 
-# ── 自定义组件 ────────────────────────────────────────────────
+# ── 自定义基础组件 ──────────────────────────────────────────────
 class GlassFrame(ctk.CTkFrame):
-    """带边框的半透明卡片"""
     def __init__(self, master, **kwargs):
         kwargs.setdefault("fg_color", COLORS["bg_card"])
         kwargs.setdefault("border_color", COLORS["border"])
@@ -77,43 +71,36 @@ class GlassFrame(ctk.CTkFrame):
         kwargs.setdefault("corner_radius", 14)
         super().__init__(master, **kwargs)
 
-
 class GradientButton(ctk.CTkButton):
-    """渐变主按钮"""
     def __init__(self, master, **kwargs):
         kwargs.setdefault("fg_color", COLORS["accent"])
         kwargs.setdefault("hover_color", COLORS["accent_dark"])
         kwargs.setdefault("corner_radius", 10)
-        kwargs.setdefault("font", ctk.CTkFont(size=13, weight="bold"))
+        kwargs.setdefault("font", ctk.CTkFont(family=APP_FONT, size=13, weight="bold"))
         kwargs.setdefault("text_color", "#ffffff")
         super().__init__(master, **kwargs)
 
-
 class SecondaryButton(ctk.CTkButton):
-    """次级按钮"""
     def __init__(self, master, **kwargs):
         kwargs.setdefault("fg_color", COLORS["bg_btn_sec"])
         kwargs.setdefault("hover_color", COLORS["bg_card_hover"])
         kwargs.setdefault("border_color", COLORS["border_accent"])
         kwargs.setdefault("border_width", 1)
         kwargs.setdefault("corner_radius", 10)
-        kwargs.setdefault("font", ctk.CTkFont(size=12))
+        kwargs.setdefault("font", ctk.CTkFont(family=APP_FONT, size=12))
         kwargs.setdefault("text_color", COLORS["text_secondary"])
         super().__init__(master, **kwargs)
 
-
 class IconButton(ctk.CTkButton):
-    """小图标按钮"""
     def __init__(self, master, **kwargs):
         kwargs.setdefault("fg_color", COLORS["bg_btn_sec"])
         kwargs.setdefault("hover_color", COLORS["bg_card_hover"])
         kwargs.setdefault("corner_radius", 8)
         kwargs.setdefault("width", 32)
         kwargs.setdefault("height", 32)
-        kwargs.setdefault("font", ctk.CTkFont(size=13))
+        kwargs.setdefault("font", ctk.CTkFont(family=APP_FONT, size=13))
         kwargs.setdefault("text_color", COLORS["text_secondary"])
         super().__init__(master, **kwargs)
-
 
 class StyledEntry(ctk.CTkEntry):
     def __init__(self, master, **kwargs):
@@ -122,509 +109,390 @@ class StyledEntry(ctk.CTkEntry):
         kwargs.setdefault("text_color", COLORS["text_primary"])
         kwargs.setdefault("placeholder_text_color", COLORS["text_muted"])
         kwargs.setdefault("corner_radius", 10)
-        kwargs.setdefault("font", ctk.CTkFont(size=13))
+        kwargs.setdefault("font", ctk.CTkFont(family=APP_FONT, size=13))
         super().__init__(master, **kwargs)
-
-
-class TagLabel(ctk.CTkLabel):
-    """小标签/分类标注"""
-    def __init__(self, master, text, color_key="accent", **kwargs):
-        c = COLORS[color_key]
-        super().__init__(master, text=text,
-                         fg_color=c + "33",
-                         text_color=c,
-                         corner_radius=6,
-                         font=ctk.CTkFont(size=10),
-                         **kwargs)
 
 
 # ── 账号行卡片 ────────────────────────────────────────────────
 LOGO_COLORS = {
-    "Google":   ("#f87171", "#1e1818"),
-    "GitHub":   ("#c9d1d9", "#1a1f2e"),
-    "Twitter":  ("#60a5fa", "#0d1b2e"),
-    "Amazon":   ("#fbbf24", "#1e1800"),
-    "Netflix":  ("#f87171", "#1e1010"),
-    "Steam":    ("#7dd3fc", "#0a1a2e"),
+    "Google": ("#FF3B30", "#FFEBEA"), "GitHub": ("#86868B", "#F2F2F7"),
+    "Twitter": ("#007AFF", "#E6F0FF"), "Amazon": ("#FF9500", "#FFF4E6"),
+    "Netflix": ("#FF3B30", "#FFEBEA"), "Steam": ("#0056B3", "#E6F0FF"),
 }
 
 def logo_colors(title: str):
     for key, (fg, bg) in LOGO_COLORS.items():
-        if key.lower() in title.lower():
-            return fg, bg
-    return COLORS["accent2"], COLORS["bg_card"]
-
+        if key.lower() in title.lower(): return fg, bg
+    return COLORS["accent2"], COLORS["bg_btn_sec"]
 
 class AccountRow(ctk.CTkFrame):
-    def __init__(self, master, acc_data: dict, idx: int,
-                 on_select, on_copy, on_view, on_edit, on_delete, **kwargs):
-        super().__init__(master,
-                         fg_color=COLORS["bg_card"],
-                         border_color=COLORS["border"],
-                         border_width=1,
-                         corner_radius=12, **kwargs)
+    def __init__(self, master, acc_data: dict, idx: int, on_select, on_view, on_edit, on_delete, **kwargs):
+        super().__init__(master, fg_color=COLORS["bg_card"], border_color=COLORS["border"], border_width=1, corner_radius=12, **kwargs)
         self.idx = idx
         self.acc = acc_data
         self.selected = False
-        self._on_select = on_select
-        self.configure(cursor="hand2")
 
-        # ── Logo 圆圈
         fg, bg = logo_colors(acc_data["title"])
-        logo_frame = ctk.CTkFrame(self, width=42, height=42,
-                                  fg_color=bg, corner_radius=10)
+        logo_frame = ctk.CTkFrame(self, width=42, height=42, fg_color=bg, corner_radius=10)
         logo_frame.pack(side="left", padx=(14, 10), pady=10)
         logo_frame.pack_propagate(False)
         initials = acc_data["title"][0].upper()
-        ctk.CTkLabel(logo_frame, text=initials,
-                     font=ctk.CTkFont(size=16, weight="bold"),
-                     text_color=fg).place(relx=0.5, rely=0.5, anchor="center")
+        ctk.CTkLabel(logo_frame, text=initials, font=ctk.CTkFont(family=APP_FONT, size=16, weight="bold"), text_color=fg).place(relx=0.5, rely=0.5, anchor="center")
 
-        # ── 账号信息
         info = ctk.CTkFrame(self, fg_color="transparent")
         info.pack(side="left", fill="both", expand=True, pady=8)
-        ctk.CTkLabel(info, text=acc_data["title"],
-                     font=ctk.CTkFont(size=13, weight="bold"),
-                     text_color=COLORS["text_primary"],
-                     anchor="w").pack(fill="x")
-        ctk.CTkLabel(info, text=acc_data["username"],
-                     font=ctk.CTkFont(size=11),
-                     text_color=COLORS["text_secondary"],
-                     anchor="w").pack(fill="x")
+        
+        title_row = ctk.CTkFrame(info, fg_color="transparent")
+        title_row.pack(fill="x", anchor="w")
+        ctk.CTkLabel(title_row, text=acc_data["title"], font=ctk.CTkFont(family=APP_FONT, size=13, weight="bold"), text_color=COLORS["text_primary"], anchor="w").pack(side="left")
+        
+        cat_text = acc_data.get("category", "默认")
+        cat_lbl = ctk.CTkLabel(title_row, text=cat_text, font=ctk.CTkFont(family=APP_FONT, size=10), text_color=COLORS["accent2"], fg_color=COLORS["bg_sidebar"], corner_radius=4, height=16, width=40)
+        cat_lbl.pack(side="left", padx=8)
 
-        # ── 密码点点
-        ctk.CTkLabel(self, text="●●●●●●●●",
-                     font=ctk.CTkFont(size=9),
-                     text_color=COLORS["text_muted"]).pack(side="left", padx=10)
+        ctk.CTkLabel(info, text=acc_data["username"], font=ctk.CTkFont(family=APP_FONT, size=11), text_color=COLORS["text_secondary"], anchor="w").pack(fill="x")
+        ctk.CTkLabel(self, text="●●●●●●●●", font=ctk.CTkFont(family="Consolas", size=9), text_color=COLORS["text_muted"]).pack(side="left", padx=10)
 
-        # ── 操作按钮
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
         btn_frame.pack(side="right", padx=10, pady=8)
-        IconButton(btn_frame, text="⎘", width=30, height=28,
-                   command=lambda: on_copy(idx)).pack(side="left", padx=2)
-        IconButton(btn_frame, text="👁", width=30, height=28,
-                   command=lambda: on_view(idx)).pack(side="left", padx=2)
-        IconButton(btn_frame, text="✏", width=30, height=28,
-                   command=lambda: on_edit(idx)).pack(side="left", padx=2)
-        IconButton(btn_frame, text="✕", width=30, height=28,
-                   fg_color=COLORS["bg_btn_sec"],
-                   hover_color="#3d1818",
-                   text_color=COLORS["danger"],
-                   command=lambda: on_delete(idx)).pack(side="left", padx=2)
+        IconButton(btn_frame, text="👁", command=lambda: on_view(idx)).pack(side="left", padx=2)
+        IconButton(btn_frame, text="✏", command=lambda: on_edit(idx)).pack(side="left", padx=2)
+        IconButton(btn_frame, text="✕", fg_color=COLORS["bg_btn_sec"], hover_color="#FFEBEA", text_color=COLORS["danger"], command=lambda: on_delete(idx)).pack(side="left", padx=2)
 
-        # 点击整行选中
-        for w in [self, info, logo_frame]:
-            w.bind("<Button-1>", lambda e, i=idx: on_select(i))
+        def bind_row_clicks(widget):
+            widget.bind("<Button-1>", lambda e, i=idx: on_select(i))
+            try: widget.configure(cursor="hand2")
+            except Exception: pass
+            for child in widget.winfo_children():
+                if child != btn_frame: bind_row_clicks(child)
+                    
+        bind_row_clicks(self)
 
     def set_selected(self, selected: bool):
         self.selected = selected
-        color = COLORS["bg_card_sel"] if selected else COLORS["bg_card"]
-        border = COLORS["border_accent"] if selected else COLORS["border"]
-        self.configure(fg_color=color, border_color=border)
+        self.configure(fg_color=COLORS["bg_card_sel"] if selected else COLORS["bg_card"],
+                       border_color=COLORS["border_accent"] if selected else COLORS["border"])
 
-
-# ── 侧边栏导航项 ──────────────────────────────────────────────
 class NavItem(ctk.CTkFrame):
-    def __init__(self, master, icon: str, label: str,
-                 active=False, badge=None, command=None, **kwargs):
-        super().__init__(master, fg_color="transparent",
-                         corner_radius=10, **kwargs)
+    def __init__(self, master, icon: str, label: str, active=False, badge=None, command=None, **kwargs):
+        super().__init__(master, fg_color="transparent", corner_radius=10, **kwargs)
         self._command = command
-        self._active = active
-
-        self.inner = ctk.CTkFrame(self,
-                                  fg_color=COLORS["bg_card"] if active else "transparent",
-                                  corner_radius=10)
+        self.inner = ctk.CTkFrame(self, fg_color=COLORS["bg_card"] if active else "transparent", corner_radius=10)
         self.inner.pack(fill="x", padx=4, pady=1)
 
         row = ctk.CTkFrame(self.inner, fg_color="transparent")
         row.pack(fill="x", padx=10, pady=7)
 
-        ctk.CTkLabel(row, text=icon, font=ctk.CTkFont(size=15),
-                     text_color=COLORS["accent"] if active else COLORS["text_secondary"],
-                     width=22).pack(side="left")
-        ctk.CTkLabel(row, text=label,
-                     font=ctk.CTkFont(size=13,
-                                      weight="bold" if active else "normal"),
-                     text_color=COLORS["text_primary"] if active else COLORS["text_secondary"],
-                     anchor="w").pack(side="left", padx=6, fill="x", expand=True)
+        ctk.CTkLabel(row, text=icon, font=ctk.CTkFont(family=APP_FONT, size=15), text_color=COLORS["accent"] if active else COLORS["text_secondary"], width=22).pack(side="left")
+        ctk.CTkLabel(row, text=label, font=ctk.CTkFont(family=APP_FONT, size=13, weight="bold" if active else "normal"), text_color=COLORS["text_primary"] if active else COLORS["text_secondary"], anchor="w").pack(side="left", padx=6, fill="x", expand=True)
 
-        if badge:
-            ctk.CTkLabel(row, text=str(badge),
-                         fg_color=COLORS["accent"] + "33",
-                         text_color=COLORS["accent"],
-                         corner_radius=8,
-                         font=ctk.CTkFont(size=10),
-                         width=28, height=18).pack(side="right")
+        if badge is not None:
+            self.badge_lbl = ctk.CTkLabel(row, text=str(badge), fg_color=COLORS["bg_deep"], text_color=COLORS["accent"], corner_radius=8, font=ctk.CTkFont(family=APP_FONT, size=10), width=28, height=18)
+            self.badge_lbl.pack(side="right")
 
-        self.inner.bind("<Button-1>", self._click)
-        for child in self.inner.winfo_children():
-            child.bind("<Button-1>", self._click)
-        self.inner.configure(cursor="hand2")
+        def bind_all_clicks(widget):
+            widget.bind("<Button-1>", self._click)
+            try: widget.configure(cursor="hand2") 
+            except Exception: pass
+            for child in widget.winfo_children(): bind_all_clicks(child)
+                
+        bind_all_clicks(self.inner)
 
     def _click(self, event=None):
-        if self._command:
-            self._command()
+        if self._command: self._command()
 
 
-# ── 统计卡片 ─────────────────────────────────────────────────
-class StatCard(GlassFrame):
-    def __init__(self, master, icon, value, label, accent, **kwargs):
-        super().__init__(master, **kwargs)
-        inner = ctk.CTkFrame(self, fg_color="transparent")
-        inner.pack(fill="both", expand=True, padx=14, pady=12)
-
-        # 图标圆圈
-        icon_frame = ctk.CTkFrame(inner, width=36, height=36,
-                                  fg_color=accent + "33",
-                                  corner_radius=10)
-        icon_frame.pack(anchor="w")
-        icon_frame.pack_propagate(False)
-        ctk.CTkLabel(icon_frame, text=icon,
-                     font=ctk.CTkFont(size=16),
-                     text_color=accent).place(relx=0.5, rely=0.5, anchor="center")
-
-        ctk.CTkLabel(inner, text=str(value),
-                     font=ctk.CTkFont(size=24, weight="bold"),
-                     text_color=COLORS["text_primary"]).pack(anchor="w", pady=(6, 0))
-        ctk.CTkLabel(inner, text=label,
-                     font=ctk.CTkFont(size=11),
-                     text_color=COLORS["text_muted"]).pack(anchor="w")
-
-
-# ── 主应用 ────────────────────────────────────────────────────
-class PasswordManagerApp(ctk.CTk):
-    def __init__(self):
-        super().__init__()
-        ctk.set_appearance_mode("dark")
-        ctk.set_default_color_theme("blue")
-
-        self.title("密码金库  ·  SafeVault Pro")
-        self.geometry("900x600")
-        self.minsize(800, 520)
+# ── 专属密码输入模态弹窗 ──────────────
+class CustomPasswordDialog(ctk.CTkToplevel):
+    def __init__(self, parent, title, prompt):
+        super().__init__(parent)
+        self.title(title)
+        self.geometry("380x220")
         self.configure(fg_color=COLORS["bg_deep"])
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
 
-        self.crypto = CryptoCore()
-        self.db = {"salt": "", "verify_token": "",
-                   "recovery_salt": "", "recovery_payload": "",
-                   "accounts": []}
-        self.selected_idx = None
-        self._rows: list[AccountRow] = []
+        self.result = None
 
-        self.setup_login_ui()
+        card = GlassFrame(self)
+        card.pack(fill="both", expand=True, padx=16, pady=16)
+        inner = ctk.CTkFrame(card, fg_color="transparent")
+        inner.pack(fill="both", expand=True, padx=20, pady=16)
 
-    # ═══════════════════════════════════════════════════════════
-    # 登录界面
-    # ═══════════════════════════════════════════════════════════
-    def setup_login_ui(self):
-        self._clear()
+        ctk.CTkLabel(inner, text=prompt, font=ctk.CTkFont(family=APP_FONT, size=13, weight="bold"), text_color=COLORS["text_primary"], anchor="w").pack(fill="x", pady=(0, 12))
+        
+        self.entry = StyledEntry(inner, width=300, height=38, show="●")
+        self.entry.pack(fill="x", pady=(0, 16))
+        self.entry.focus()
+
+        def confirm():
+            self.result = self.entry.get().strip()
+            self.destroy()
+
+        def cancel():
+            self.destroy()
+
+        btn_row = ctk.CTkFrame(inner, fg_color="transparent")
+        btn_row.pack(fill="x")
+        SecondaryButton(btn_row, text="取消", width=80, command=cancel).pack(side="right", padx=(8, 0))
+        GradientButton(btn_row, text="确认", width=80, command=confirm).pack(side="right")
+
+        self.bind("<Return>", lambda e: confirm())
+        self.bind("<Escape>", lambda e: cancel())
+        self.wait_window()
+
+
+# ── 独立登录窗口 ──────────────────────────────────────────
+class LoginWindow(ctk.CTkToplevel):
+    def __init__(self, app_instance):
+        super().__init__()
+        self.app = app_instance
+        self.title("安全验证")
         self.geometry("420x520")
         self.resizable(False, False)
+        self.configure(fg_color=COLORS["bg_deep"])
+        
+        self.transient(self.app)
+        self.grab_set()
+        self.protocol("WM_DELETE_WINDOW", self.app.quit)
 
-        # 渐变背景感：深色外框 + 卡片
         outer = ctk.CTkFrame(self, fg_color=COLORS["bg_deep"])
-        outer.place(relx=0.5, rely=0.5, anchor="center",
-                    relwidth=1.0, relheight=1.0)
+        outer.place(relx=0.5, rely=0.5, anchor="center", relwidth=1.0, relheight=1.0)
 
         card = GlassFrame(outer, width=340, height=400)
         card.place(relx=0.5, rely=0.5, anchor="center")
         card.pack_propagate(False)
 
         inner = ctk.CTkFrame(card, fg_color="transparent")
-        inner.place(relx=0.5, rely=0.5, anchor="center",
-                    relwidth=0.85, relheight=0.9)
+        inner.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.85, relheight=0.9)
 
-        # Logo
-        logo_bg = ctk.CTkFrame(inner, width=64, height=64,
-                               fg_color=COLORS["accent"] + "22",
-                               corner_radius=18)
+        logo_bg = ctk.CTkFrame(inner, width=64, height=64, fg_color=COLORS["bg_input"], border_color=COLORS["accent"], border_width=1, corner_radius=18)
         logo_bg.pack(pady=(10, 0))
         logo_bg.pack_propagate(False)
-        ctk.CTkLabel(logo_bg, text="🛡",
-                     font=ctk.CTkFont(size=28)).place(relx=0.5, rely=0.5, anchor="center")
+        ctk.CTkLabel(logo_bg, text="🛡", font=ctk.CTkFont(family=APP_FONT, size=28)).place(relx=0.5, rely=0.5, anchor="center")
 
-        ctk.CTkLabel(inner, text="密码金库",
-                     font=ctk.CTkFont(size=22, weight="bold"),
-                     text_color=COLORS["text_primary"]).pack(pady=(12, 2))
+        ctk.CTkLabel(inner, text="密码金库", font=ctk.CTkFont(family=APP_FONT, size=22, weight="bold"), text_color=COLORS["text_primary"]).pack(pady=(12, 2))
 
-        is_first = not self._load_db()
-        hint = "首次使用，请设置主密码" if is_first else "输入主密码以解锁金库"
-        ctk.CTkLabel(inner, text=hint,
-                     font=ctk.CTkFont(size=12),
-                     text_color=COLORS["text_muted"]).pack(pady=(0, 18))
+        self.is_first = not self.app._load_db()
+        hint = "首次使用，请设置主密码" if self.is_first else "输入主密码以解锁金库"
+        ctk.CTkLabel(inner, text=hint, font=ctk.CTkFont(family=APP_FONT, size=12), text_color=COLORS["text_muted"]).pack(pady=(0, 18))
 
-        self.pwd_entry = StyledEntry(inner, width=240, height=42,
-                                     show="●",
-                                     placeholder_text="主密码")
+        self.pwd_entry = StyledEntry(inner, width=240, height=42, show="●", placeholder_text="主密码")
         self.pwd_entry.pack(pady=(0, 16))
         self.pwd_entry.focus()
-        self.bind("<Return>", lambda e: self._login(is_first))
+        
+        self.bind("<Return>", lambda e: self._attempt_login())
 
-        btn_text = "  初始化金库  " if is_first else "  解锁金库  "
-        GradientButton(inner, text=btn_text, height=42, width=240,
-                       command=lambda: self._login(is_first)).pack()
+        btn_text = "  初始化金库  " if self.is_first else "  解锁金库  "
+        GradientButton(inner, text=btn_text, height=42, width=240, command=self._attempt_login).pack()
 
-        if not is_first and self.db.get("recovery_payload"):
-            ctk.CTkButton(inner, text="忘记密码？使用恢复码重置",
-                          fg_color="transparent",
-                          hover_color=COLORS["bg_card"],
-                          text_color=COLORS["text_muted"],
-                          font=ctk.CTkFont(size=11),
-                          command=self._recover_password).pack(pady=(12, 0))
+        if not self.is_first and self.app.db.get("recovery_payload"):
+            ctk.CTkButton(inner, text="忘记密码？使用恢复码重置", fg_color="transparent", hover_color=COLORS["bg_card"], text_color=COLORS["text_muted"], font=ctk.CTkFont(family=APP_FONT, size=11), command=self._recover).pack(pady=(12, 0))
 
-    # ═══════════════════════════════════════════════════════════
-    # 主界面
-    # ═══════════════════════════════════════════════════════════
-    def setup_main_ui(self):
-        self._clear()
+    def _attempt_login(self):
+        master_pwd = self.pwd_entry.get()
+        if not master_pwd:
+            messagebox.showwarning("提示", "密码不能为空！")
+            return
+
+        if self.is_first:
+            dialog = CustomPasswordDialog(self, "二次确认", "请再次输入主密码以防手误：")
+            confirm_pwd = dialog.result
+            
+            if master_pwd != confirm_pwd:
+                messagebox.showerror("错误", "两次输入的密码不一致，请重新输入！")
+                self.pwd_entry.delete(0, "end")
+                master_pwd = confirm_pwd = None
+                del master_pwd, confirm_pwd
+                gc.collect()
+                return
+
+            salt = os.urandom(16)
+            self.app.db["salt"] = base64.b64encode(salt).decode()
+            self.app.crypto.derive_and_set_key(master_pwd, salt)
+            self.app.db["verify_token"] = self.app.crypto.encrypt("AUTH_SUCCESS")
+            self.app.db["categories"] = ["默认", "社交", "金融", "开发"]
+
+            recovery_key = "RM-" + os.urandom(6).hex().upper()
+            recovery_salt = os.urandom(16)
+            self.app.db["recovery_salt"] = base64.b64encode(recovery_salt).decode()
+            rec_enc_key = self.app.crypto.get_key_from_pwd(recovery_key, recovery_salt)
+            f_rec = Fernet(rec_enc_key)
+            self.app.db["recovery_payload"] = f_rec.encrypt(self.app.crypto.key).decode()
+            self.app._save_db()
+
+            try:
+                with open("安全恢复码备份.txt", "w", encoding="utf-8") as f:
+                    f.write(f"你的安全恢复码是：{recovery_key}\n请妥善保管，切勿泄露给他人。")
+                extra_msg = f"\n\n恢复码已同步保存在同目录下【安全恢复码备份.txt】中！"
+            except Exception: extra_msg = ""
+
+            msg = f"初始化成功！\n\n【重要】你的安全恢复码是：\n{recovery_key}\n\n这是忘记主密码时的唯一找回凭证，请妥善保存！{extra_msg}"
+            messagebox.showwarning("⚠️ 请立刻备份恢复码", msg)
+            
+            master_pwd = confirm_pwd = None
+            del master_pwd, confirm_pwd
+            gc.collect()
+            self._unlock_success()
+        else:
+            salt = base64.b64decode(self.app.db.get("salt", ""))
+            self.app.crypto.derive_and_set_key(master_pwd, salt)
+            try:
+                if self.app.crypto.decrypt(self.app.db.get("verify_token", "")) == "AUTH_SUCCESS":
+                    master_pwd = None
+                    del master_pwd
+                    gc.collect()
+                    self._unlock_success()
+                else:
+                    raise InvalidToken
+            except Exception:
+                messagebox.showerror("错误", "密码错误，拒绝访问！")
+                self.pwd_entry.delete(0, "end")
+                master_pwd = None
+                del master_pwd
+                gc.collect()
+
+    def _unlock_success(self):
+        self.grab_release()
+        self.destroy()
+        self.app.unlock_app()
+
+    def _recover(self):
+        self.app._recover_password(self)
+
+
+# ── 主应用窗口 ────────────────────────────────────────────────
+class PasswordManagerApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        ctk.set_appearance_mode("light") # macOS 浅色模式
+        ctk.set_default_color_theme("blue")
+
+        self.title("密码金库  ·  SafeVault Pro")
         self.geometry("960x640")
-        self.resizable(True, True)
+        self.minsize(800, 520)
+        self.configure(fg_color=COLORS["bg_deep"])
 
+        self.crypto = CryptoCore()
+        self.db = {"salt": "", "verify_token": "", "recovery_salt": "", "recovery_payload": "", "categories": ["默认"], "accounts": []}
+        self._rows = []
+        self.current_filter_category = "全部"
+
+        self.withdraw()
+        LoginWindow(self)
+
+    def unlock_app(self):
+        """解锁成功回调"""
+        for w in self.winfo_children(): w.destroy()
+        
         root_frame = ctk.CTkFrame(self, fg_color=COLORS["bg_deep"])
         root_frame.pack(fill="both", expand=True)
 
         # ── 左侧边栏
-        sidebar = ctk.CTkFrame(root_frame, width=210,
-                               fg_color=COLORS["bg_sidebar"],
-                               corner_radius=0)
-        sidebar.pack(side="left", fill="y")
-        sidebar.pack_propagate(False)
-        self._build_sidebar(sidebar)
-
-        # ── 右侧内容区
-        content = ctk.CTkFrame(root_frame, fg_color=COLORS["bg_deep"],
-                               corner_radius=0)
-        content.pack(side="left", fill="both", expand=True)
-        self._build_content(content)
-
-    def _build_sidebar(self, parent):
-        # 品牌区
-        brand = ctk.CTkFrame(parent, fg_color="transparent")
+        self.sidebar = ctk.CTkFrame(root_frame, width=210, fg_color=COLORS["bg_sidebar"], corner_radius=0)
+        self.sidebar.pack(side="left", fill="y")
+        self.sidebar.pack_propagate(False)
+        
+        brand = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         brand.pack(fill="x", padx=14, pady=(20, 12))
-
-        logo_bg = ctk.CTkFrame(brand, width=38, height=38,
-                               fg_color=COLORS["accent"] + "33",
-                               corner_radius=10)
+        logo_bg = ctk.CTkFrame(brand, width=38, height=38, fg_color=COLORS["bg_input"], border_color=COLORS["accent"], border_width=1, corner_radius=10)
         logo_bg.pack(side="left")
         logo_bg.pack_propagate(False)
-        ctk.CTkLabel(logo_bg, text="🛡",
-                     font=ctk.CTkFont(size=18)).place(relx=0.5, rely=0.5, anchor="center")
+        ctk.CTkLabel(logo_bg, text="🛡", font=ctk.CTkFont(family=APP_FONT, size=18)).place(relx=0.5, rely=0.5, anchor="center")
 
         brand_text = ctk.CTkFrame(brand, fg_color="transparent")
         brand_text.pack(side="left", padx=8)
-        ctk.CTkLabel(brand_text, text="密码金库",
-                     font=ctk.CTkFont(size=14, weight="bold"),
-                     text_color=COLORS["text_primary"]).pack(anchor="w")
-        ctk.CTkLabel(brand_text, text="SafeVault Pro",
-                     font=ctk.CTkFont(size=10),
-                     text_color=COLORS["text_muted"]).pack(anchor="w")
+        ctk.CTkLabel(brand_text, text="密码金库", font=ctk.CTkFont(family=APP_FONT, size=14, weight="bold"), text_color=COLORS["text_primary"]).pack(anchor="w")
+        ctk.CTkLabel(brand_text, text="SafeVault Pro", font=ctk.CTkFont(family=APP_FONT, size=10), text_color=COLORS["text_muted"]).pack(anchor="w")
 
-        # 分隔线
-        ctk.CTkFrame(parent, height=1,
-                     fg_color=COLORS["border"]).pack(fill="x", padx=14, pady=(0, 10))
+        ctk.CTkFrame(self.sidebar, height=1, fg_color=COLORS["border"]).pack(fill="x", padx=14, pady=(0, 10))
 
-        # 导航
-        count = len(self.db["accounts"])
-        nav_items = [
-            ("  ⊞", "全部账号", True, count),
-            ("  ★", "收藏夹",   False, None),
-            ("  ⏱", "最近使用", False, None),
-        ]
-        self._nav_label(parent, "主菜单")
-        for icon, label, active, badge in nav_items:
-            NavItem(parent, icon, label, active=active,
-                    badge=badge).pack(fill="x", padx=8)
+        self.menu_scroll = ctk.CTkScrollableFrame(self.sidebar, fg_color="transparent", scrollbar_button_color=COLORS["border"])
+        self.menu_scroll.pack(fill="both", expand=True, padx=4, pady=4)
 
-        self._nav_label(parent, "分类")
-        for icon, label in [("  ☁", "社交媒体"), ("  💳", "金融账户"), ("  ⌨", "开发工具")]:
-            NavItem(parent, icon, label).pack(fill="x", padx=8)
+        self._render_sidebar_menu()
 
-        self._nav_label(parent, "系统")
-        NavItem(parent, "  ⚙", "偏好设置").pack(fill="x", padx=8)
-        NavItem(parent, "  🔒", "锁定金库",
-                command=self._lock).pack(fill="x", padx=8)
+        # ── 右侧内容区
+        content = ctk.CTkFrame(root_frame, fg_color=COLORS["bg_deep"], corner_radius=0)
+        content.pack(side="left", fill="both", expand=True)
 
-        # 底部用户区
-        ctk.CTkFrame(parent, height=1,
-                     fg_color=COLORS["border"]).pack(fill="x", padx=14, pady=(10, 8), side="bottom")
-        user_bar = ctk.CTkFrame(parent, fg_color=COLORS["bg_card"],
-                                corner_radius=10, side="bottom")
-        user_bar.pack(fill="x", padx=10, pady=(0, 14), side="bottom")
-        row = ctk.CTkFrame(user_bar, fg_color="transparent")
-        row.pack(fill="x", padx=10, pady=8)
+        self.topbar = ctk.CTkFrame(content, fg_color="transparent", height=64)
+        self.topbar.pack(fill="x", padx=24, pady=(20, 0))
+        self.topbar.pack_propagate(False)
+        
+        self.title_lbl = ctk.CTkLabel(self.topbar, text="全部账号", font=ctk.CTkFont(family=APP_FONT, size=20, weight="bold"), text_color=COLORS["text_primary"])
+        self.title_lbl.pack(side="left", anchor="center")
 
-        av = ctk.CTkFrame(row, width=30, height=30,
-                          fg_color=COLORS["accent"] + "55",
-                          corner_radius=15)
-        av.pack(side="left")
-        av.pack_propagate(False)
-        ctk.CTkLabel(av, text="我", font=ctk.CTkFont(size=12, weight="bold"),
-                     text_color=COLORS["accent2"]).place(relx=0.5, rely=0.5, anchor="center")
-        info = ctk.CTkFrame(row, fg_color="transparent")
-        info.pack(side="left", padx=8)
-        ctk.CTkLabel(info, text="本地用户",
-                     font=ctk.CTkFont(size=12),
-                     text_color=COLORS["text_primary"]).pack(anchor="w")
-        ctk.CTkLabel(info, text="已加密保护",
-                     font=ctk.CTkFont(size=10),
-                     text_color=COLORS["success"]).pack(anchor="w")
-
-    def _nav_label(self, parent, text):
-        ctk.CTkLabel(parent, text=text,
-                     font=ctk.CTkFont(size=10),
-                     text_color=COLORS["text_muted"],
-                     anchor="w").pack(fill="x", padx=22, pady=(12, 2))
-
-    def _build_content(self, parent):
-        # ── 顶部栏
-        topbar = ctk.CTkFrame(parent, fg_color="transparent", height=64)
-        topbar.pack(fill="x", padx=24, pady=(20, 0))
-        topbar.pack_propagate(False)
-
-        ctk.CTkLabel(topbar, text="全部账号",
-                     font=ctk.CTkFont(size=20, weight="bold"),
-                     text_color=COLORS["text_primary"]).pack(side="left", anchor="center")
-
-        # 搜索框
-        search_frame = ctk.CTkFrame(topbar, fg_color=COLORS["bg_card"],
-                                    border_color=COLORS["border"],
-                                    border_width=1,
-                                    corner_radius=10, height=38)
+        search_frame = ctk.CTkFrame(self.topbar, fg_color=COLORS["bg_card"], border_color=COLORS["border"], border_width=1, corner_radius=10, height=38)
         search_frame.pack(side="left", padx=20, anchor="center")
         search_frame.pack_propagate(False)
-        ctk.CTkLabel(search_frame, text="🔍",
-                     font=ctk.CTkFont(size=13),
-                     text_color=COLORS["text_muted"]).pack(side="left", padx=(10, 4))
+        ctk.CTkLabel(search_frame, text="🔍", font=ctk.CTkFont(family=APP_FONT, size=13), text_color=COLORS["text_muted"]).pack(side="left", padx=(10, 4))
+        
         self.search_var = ctk.StringVar()
         self.search_var.trace("w", self._on_search)
-        ctk.CTkEntry(search_frame,
-                     textvariable=self.search_var,
-                     width=180, height=36,
-                     fg_color="transparent",
-                     border_width=0,
-                     text_color=COLORS["text_primary"],
-                     placeholder_text="搜索平台或账号…",
-                     placeholder_text_color=COLORS["text_muted"],
-                     font=ctk.CTkFont(size=13)).pack(side="left")
+        ctk.CTkEntry(search_frame, textvariable=self.search_var, width=180, height=36, fg_color="transparent", border_width=0, text_color=COLORS["text_primary"], placeholder_text="搜索平台或账号…", placeholder_text_color=COLORS["text_muted"], font=ctk.CTkFont(family=APP_FONT, size=13)).pack(side="left")
 
-        GradientButton(topbar, text="＋  添加账号",
-                       height=38, width=130,
-                       command=self._add_account).pack(side="right", anchor="center")
+        GradientButton(self.topbar, text="＋  添加账号", height=38, width=130, command=self._add_account).pack(side="right", anchor="center")
 
-        # ── 统计卡片
-        stats_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        stats_frame.pack(fill="x", padx=24, pady=(16, 0))
+        filter_bar = ctk.CTkFrame(content, fg_color="transparent")
+        filter_bar.pack(fill="x", padx=24, pady=(24, 8))
+        ctk.CTkLabel(filter_bar, text="账号列表", font=ctk.CTkFont(family=APP_FONT, size=14, weight="bold"), text_color=COLORS["text_secondary"]).pack(side="left")
 
-        count = len(self.db["accounts"])
-        for icon, val, label, accent, col in [
-            ("🔑", count,         "已保存账号",   COLORS["accent"],  0),
-            ("🛡", max(count-2,0),"密码强度正常", COLORS["success"], 1),
-            ("⚠", min(count,2),  "建议更新",     COLORS["warning"], 2),
-        ]:
-            c = StatCard(stats_frame, icon, val, label, accent)
-            c.grid(row=0, column=col, sticky="nsew", padx=(0, 12 if col < 2 else 0))
-        stats_frame.grid_columnconfigure((0, 1, 2), weight=1)
-
-        # ── 筛选标签栏
-        filter_bar = ctk.CTkFrame(parent, fg_color="transparent")
-        filter_bar.pack(fill="x", padx=24, pady=(16, 8))
-
-        ctk.CTkLabel(filter_bar, text="账号列表",
-                     font=ctk.CTkFont(size=13, weight="bold"),
-                     text_color=COLORS["text_secondary"]).pack(side="left")
-
-        for label, active in [("全部", True), ("社交", False), ("金融", False), ("开发", False)]:
-            fg = COLORS["accent"] + "33" if active else COLORS["bg_btn_sec"]
-            tc = COLORS["accent"] if active else COLORS["text_muted"]
-            ctk.CTkButton(filter_bar, text=label,
-                          fg_color=fg, hover_color=COLORS["bg_card_hover"],
-                          text_color=tc,
-                          font=ctk.CTkFont(size=11),
-                          corner_radius=20, height=26, width=52,
-                          border_width=1 if active else 0,
-                          border_color=COLORS["border_accent"] if active else "transparent"
-                          ).pack(side="right", padx=4)
-
-        # ── 账号列表 (可滚动)
-        self.list_scroll = ctk.CTkScrollableFrame(
-            parent,
-            fg_color="transparent",
-            scrollbar_button_color=COLORS["border"],
-            scrollbar_button_hover_color=COLORS["border_accent"]
-        )
+        self.list_scroll = ctk.CTkScrollableFrame(content, fg_color="transparent", scrollbar_button_color=COLORS["border"], scrollbar_button_hover_color=COLORS["border_accent"])
         self.list_scroll.pack(fill="both", expand=True, padx=24, pady=(0, 16))
 
         self._refresh_list()
+        self.deiconify()
 
-    # ═══════════════════════════════════════════════════════════
-    # 弹窗 & 对话框
-    # ═══════════════════════════════════════════════════════════
-    def _show_dialog(self, title, fields: list[tuple]) -> dict | None:
-        """通用弹窗，fields = [(label, placeholder, show_char_or_None)]"""
-        dialog = ctk.CTkToplevel(self)
-        dialog.title(title)
-        dialog.geometry("360x80")
-        dialog.configure(fg_color=COLORS["bg_deep"])
-        dialog.transient(self)
-        dialog.grab_set()
-        dialog.resizable(False, False)
+    def _render_sidebar_menu(self):
+        for w in self.menu_scroll.winfo_children(): w.destroy()
+        ctk.CTkLabel(self.menu_scroll, text="主菜单", font=ctk.CTkFont(family=APP_FONT, size=10), text_color=COLORS["text_muted"], anchor="w").pack(fill="x", padx=14, pady=(4, 2))
+        
+        is_all_active = (self.current_filter_category == "全部")
+        self.all_acc_nav = NavItem(self.menu_scroll, "  ⊞", "全部账号", active=is_all_active, badge=len(self.db["accounts"]), command=lambda: self._filter_by_category("全部"))
+        self.all_acc_nav.pack(fill="x")
 
-        card = GlassFrame(dialog)
-        card.pack(fill="both", expand=True, padx=14, pady=14)
+        NavItem(self.menu_scroll, "  🔒", "锁定金库", command=self._lock).pack(fill="x")
 
-        inner = ctk.CTkFrame(card, fg_color="transparent")
-        inner.pack(fill="both", expand=True, padx=20, pady=16)
+        ctk.CTkLabel(self.menu_scroll, text="自定义分类", font=ctk.CTkFont(family=APP_FONT, size=10), text_color=COLORS["text_muted"], anchor="w").pack(fill="x", padx=14, pady=(16, 2))
+        if "categories" not in self.db: self.db["categories"] = ["默认", "社交", "金融", "开发"]
 
-        ctk.CTkLabel(inner, text=title,
-                     font=ctk.CTkFont(size=15, weight="bold"),
-                     text_color=COLORS["text_primary"]).pack(anchor="w", pady=(0, 14))
+        for cat in self.db["categories"]:
+            cat_count = sum(1 for a in self.db["accounts"] if a.get("category", "默认") == cat)
+            is_active = (self.current_filter_category == cat)
+            NavItem(self.menu_scroll, "  📁", cat, active=is_active, badge=cat_count, command=lambda c=cat: self._filter_by_category(c)).pack(fill="x")
 
-        entries = []
-        height_extra = 60 * len(fields) + 80
-        dialog.geometry(f"360x{height_extra}")
+        ctk.CTkFrame(self.menu_scroll, height=1, fg_color=COLORS["border"]).pack(fill="x", padx=10, pady=10)
+        SecondaryButton(self.menu_scroll, text="＋ 新增分类类别", height=32, font=ctk.CTkFont(family=APP_FONT, size=11), command=self._add_new_category).pack(fill="x", padx=4)
 
-        for label, placeholder, show in fields:
-            ctk.CTkLabel(inner, text=label,
-                         font=ctk.CTkFont(size=12),
-                         text_color=COLORS["text_secondary"]).pack(anchor="w")
-            kw = dict(width=300, height=38, placeholder_text=placeholder)
-            if show:
-                kw["show"] = show
-            e = StyledEntry(inner, **kw)
-            e.pack(pady=(2, 10))
-            entries.append(e)
+    def _add_new_category(self):
+        new_cat = simpledialog.askstring("新增类别", "请输入新分类的名称：", parent=self)
+        if not new_cat or not new_cat.strip(): return
+        new_cat = new_cat.strip()
+        if new_cat in self.db["categories"]:
+            messagebox.showwarning("提示", "该分类类别已存在！")
+            return
+        self.db["categories"].append(new_cat)
+        self._save_db()
+        self._render_sidebar_menu()
 
-        result = {}
+    def _filter_by_category(self, category_name):
+        self.current_filter_category = category_name
+        self.title_lbl.configure(text=f"{category_name} 账号")
+        self._render_sidebar_menu()
+        self._refresh_list()
 
-        def confirm():
-            for i, (label, _, _) in enumerate(fields):
-                val = entries[i].get().strip()
-                if not val:
-                    return
-                result[label] = val
-            dialog.destroy()
-
-        def cancel():
-            dialog.destroy()
-
-        btn_row = ctk.CTkFrame(inner, fg_color="transparent")
-        btn_row.pack(fill="x", pady=(4, 0))
-        SecondaryButton(btn_row, text="取消", width=80, command=cancel).pack(side="right", padx=(8, 0))
-        GradientButton(btn_row, text="确认", width=80, command=confirm).pack(side="right")
-
-        entries[0].focus()
-        dialog.bind("<Return>", lambda e: confirm())
-        dialog.bind("<Escape>", lambda e: cancel())
-        dialog.wait_window()
-        return result if result else None
+    def _lock(self):
+        self.withdraw()
+        self.crypto = CryptoCore()
+        gc.collect()
+        LoginWindow(self)
 
     def _view_password_dialog(self, idx):
         acc = self.db["accounts"][idx]
-        try:
-            pwd = self.crypto.decrypt(acc["password"])
-        except Exception:
-            messagebox.showerror("错误", "解密失败！")
-            return
+        try: pwd = self.crypto.decrypt(acc["password"])
+        except Exception: messagebox.showerror("错误", "解密失败！"); return
 
         dialog = ctk.CTkToplevel(self)
         dialog.title(f"查看凭证 — {acc['title']}")
@@ -642,298 +510,249 @@ class PasswordManagerApp(ctk.CTk):
         fg, _ = logo_colors(acc["title"])
         head = ctk.CTkFrame(inner, fg_color="transparent")
         head.pack(fill="x", pady=(0, 16))
-        ctk.CTkLabel(head, text=acc["title"][0].upper(),
-                     font=ctk.CTkFont(size=18, weight="bold"),
-                     text_color=fg,
-                     width=44, height=44,
-                     fg_color=fg + "22",
-                     corner_radius=12).pack(side="left")
+
+        logo_icon_bg = ctk.CTkFrame(head, width=44, height=44, fg_color=COLORS["bg_input"], border_color=fg, border_width=1, corner_radius=12)
+        logo_icon_bg.pack(side="left")
+        logo_icon_bg.pack_propagate(False)
+        ctk.CTkLabel(logo_icon_bg, text=acc["title"][0].upper(), font=ctk.CTkFont(family=APP_FONT, size=18, weight="bold"), text_color=fg).place(relx=0.5, rely=0.5, anchor="center")
+
         t = ctk.CTkFrame(head, fg_color="transparent")
         t.pack(side="left", padx=10)
-        ctk.CTkLabel(t, text=acc["title"],
-                     font=ctk.CTkFont(size=15, weight="bold"),
-                     text_color=COLORS["text_primary"]).pack(anchor="w")
-        ctk.CTkLabel(t, text=acc["username"],
-                     font=ctk.CTkFont(size=12),
-                     text_color=COLORS["text_secondary"]).pack(anchor="w")
+        ctk.CTkLabel(t, text=acc["title"], font=ctk.CTkFont(family=APP_FONT, size=15, weight="bold"), text_color=COLORS["text_primary"]).pack(anchor="w")
+        ctk.CTkLabel(t, text=acc["username"], font=ctk.CTkFont(family=APP_FONT, size=12), text_color=COLORS["text_secondary"]).pack(anchor="w")
 
-        ctk.CTkLabel(inner, text="密码",
-                     font=ctk.CTkFont(size=11),
-                     text_color=COLORS["text_muted"],
-                     anchor="w").pack(fill="x")
-
-        pwd_frame = ctk.CTkFrame(inner, fg_color=COLORS["bg_input"],
-                                 border_color=COLORS["border_accent"],
-                                 border_width=1, corner_radius=10)
+        ctk.CTkLabel(inner, text="密码", font=ctk.CTkFont(family=APP_FONT, size=11), text_color=COLORS["text_muted"], anchor="w").pack(fill="x")
+        pwd_frame = ctk.CTkFrame(inner, fg_color=COLORS["bg_input"], border_color=COLORS["border_accent"], border_width=1, corner_radius=10)
         pwd_frame.pack(fill="x", pady=(4, 12))
 
         show_var = ctk.BooleanVar(value=False)
-        pwd_entry = ctk.CTkEntry(pwd_frame,
-                                 font=ctk.CTkFont(family="Courier", size=15),
-                                 fg_color="transparent", border_width=0,
-                                 text_color=COLORS["accent2"],
-                                 show="●")
+        # 使用 Consolas 防止点、下划线被裁剪
+        pwd_entry = ctk.CTkEntry(pwd_frame, font=ctk.CTkFont(family="Consolas", size=16, weight="bold"), fg_color="transparent", border_width=0, text_color=COLORS["accent2"], show="●")
         pwd_entry.insert(0, pwd)
         pwd_entry.configure(state="readonly")
         pwd_entry.pack(side="left", fill="x", expand=True, padx=12, pady=8)
 
-        def toggle_show():
-            if show_var.get():
-                pwd_entry.configure(show="")
-            else:
-                pwd_entry.configure(show="●")
-
-        ctk.CTkCheckBox(pwd_frame, text="显示",
-                        variable=show_var,
-                        onvalue=True, offvalue=False,
-                        command=toggle_show,
-                        font=ctk.CTkFont(size=11),
-                        text_color=COLORS["text_muted"],
-                        fg_color=COLORS["accent"],
-                        width=60).pack(side="right", padx=8)
-
-        def copy_pwd():
+        def copy_to_clipboard():
             self.clipboard_clear()
             self.clipboard_append(pwd)
-            copy_btn.configure(text="✓ 已复制", fg_color=COLORS["success"] + "44",
-                               text_color=COLORS["success"])
-            dialog.after(2000, lambda: copy_btn.configure(
-                text="⎘ 复制密码", fg_color=COLORS["bg_btn_sec"],
-                text_color=COLORS["text_secondary"]))
+            copy_btn.configure(text="✓ 已复制并提供5秒保护", text_color=COLORS["success"])
+            self.after(5000, secure_clear_clipboard)
 
-        copy_btn = SecondaryButton(inner, text="⎘ 复制密码", height=36,
-                                   command=copy_pwd)
+        def secure_clear_clipboard():
+            try:
+                if self.clipboard_get() == pwd:
+                    self.clipboard_clear()
+                    self.clipboard_append(" ")
+                    self.clipboard_clear()
+            except Exception: pass
+            if copy_btn.winfo_exists():
+                copy_btn.configure(text="⎘ 复制密码", text_color=COLORS["text_secondary"])
+
+        copy_btn = SecondaryButton(inner, text="⎘ 复制密码", height=36, command=copy_to_clipboard)
         copy_btn.pack(fill="x")
+        ctk.CTkCheckBox(pwd_frame, text="显示", variable=show_var, onvalue=True, offvalue=False, command=lambda: pwd_entry.configure(show="" if show_var.get() else "●"), font=ctk.CTkFont(family=APP_FONT, size=11), text_color=COLORS["text_muted"], fg_color=COLORS["accent"], width=60).pack(side="right", padx=8)
 
-    def _edit_dialog(self, idx):
-        acc = self.db["accounts"][idx]
-        try:
-            cur_pwd = self.crypto.decrypt(acc["password"])
-        except Exception:
-            messagebox.showerror("错误", "解密失败！")
-            return
+        def on_close():
+            nonlocal pwd
+            pwd = None
+            del pwd
+            gc.collect()
+            dialog.destroy()
+        dialog.protocol("WM_DELETE_WINDOW", on_close)
 
+    def _add_account(self):
         dialog = ctk.CTkToplevel(self)
-        dialog.title("修改账号")
-        dialog.geometry("380x360")
+        dialog.title("添加账号")
+        dialog.geometry("500x520")
         dialog.configure(fg_color=COLORS["bg_deep"])
         dialog.transient(self)
         dialog.grab_set()
         dialog.resizable(False, False)
 
         card = GlassFrame(dialog)
-        card.pack(fill="both", expand=True, padx=14, pady=14)
+        card.pack(fill="both", expand=True, padx=20, pady=20)
         inner = ctk.CTkFrame(card, fg_color="transparent")
-        inner.pack(fill="both", expand=True, padx=20, pady=20)
+        inner.pack(fill="both", expand=True, padx=32, pady=24)
 
-        ctk.CTkLabel(inner, text="修改账号",
-                     font=ctk.CTkFont(size=15, weight="bold"),
-                     text_color=COLORS["text_primary"]).pack(anchor="w", pady=(0, 16))
+        ctk.CTkLabel(inner, text="添加新账号凭证", font=ctk.CTkFont(family=APP_FONT, size=18, weight="bold"), text_color=COLORS["text_primary"]).pack(anchor="w", pady=(0, 20))
 
-        fields_cfg = [("平台名称", acc["title"]), ("账号 / 邮箱", acc["username"]), ("密码", cur_pwd)]
-        entries = []
-        for label, default in fields_cfg:
-            ctk.CTkLabel(inner, text=label,
-                         font=ctk.CTkFont(size=12),
-                         text_color=COLORS["text_secondary"]).pack(anchor="w")
-            e = StyledEntry(inner, width=300, height=36)
-            e.insert(0, default)
-            e.pack(pady=(2, 10))
-            entries.append(e)
+        ctk.CTkLabel(inner, text="平台名称", font=ctk.CTkFont(family=APP_FONT, size=13), text_color=COLORS["text_secondary"]).pack(anchor="w")
+        e_title = StyledEntry(inner, width=400, height=40, font=ctk.CTkFont(family=APP_FONT, size=14), placeholder_text="e.g. Google")
+        e_title.pack(pady=(4, 12))
+
+        ctk.CTkLabel(inner, text="账号 / 邮箱", font=ctk.CTkFont(family=APP_FONT, size=13), text_color=COLORS["text_secondary"]).pack(anchor="w")
+        e_user = StyledEntry(inner, width=400, height=40, font=ctk.CTkFont(family=APP_FONT, size=14), placeholder_text="e.g. user@example.com")
+        e_user.pack(pady=(4, 12))
+
+        ctk.CTkLabel(inner, text="密码", font=ctk.CTkFont(family=APP_FONT, size=13), text_color=COLORS["text_secondary"]).pack(anchor="w")
+        e_pwd = StyledEntry(inner, width=400, height=40, font=ctk.CTkFont(family=APP_FONT, size=14), show="●", placeholder_text="输入密码")
+        e_pwd.pack(pady=(4, 12))
+
+        ctk.CTkLabel(inner, text="账号分类归属", font=ctk.CTkFont(family=APP_FONT, size=13), text_color=COLORS["text_secondary"]).pack(anchor="w")
+        cat_options = self.db.get("categories", ["默认"])
+        e_cat_menu = ctk.CTkOptionMenu(inner, width=400, height=40, values=cat_options, font=ctk.CTkFont(family=APP_FONT, size=13), fg_color=COLORS["bg_input"], button_color=COLORS["bg_btn_sec"], button_hover_color=COLORS["bg_card_hover"], dropdown_fg_color=COLORS["bg_card"], dropdown_font=ctk.CTkFont(family=APP_FONT, size=13), text_color=COLORS["text_primary"])
+        e_cat_menu.pack(pady=(4, 20))
+        e_cat_menu.set("默认")
 
         def save():
-            vals = [e.get().strip() for e in entries]
-            if not all(vals):
-                return
-            self.db["accounts"][idx]["title"] = vals[0]
-            self.db["accounts"][idx]["username"] = vals[1]
-            self.db["accounts"][idx]["password"] = self.crypto.encrypt(vals[2])
+            t, u, p, c = e_title.get().strip(), e_user.get().strip(), e_pwd.get().strip(), e_cat_menu.get()
+            if not all([t, u, p]): return
+            self.db["accounts"].append({"title": t, "username": u, "password": self.crypto.encrypt(p), "category": c})
             self._save_db()
+            self._render_sidebar_menu()
             self._refresh_list()
+            p = None
+            del p
+            gc.collect()
             dialog.destroy()
 
-        GradientButton(inner, text="💾  保存修改",
-                       height=38, command=save).pack(fill="x", pady=(4, 0))
+        GradientButton(inner, text="➕ 确认添加", width=400, height=42, font=ctk.CTkFont(family=APP_FONT, size=14, weight="bold"), command=save).pack(fill="x")
+        e_title.focus()
 
-    # ═══════════════════════════════════════════════════════════
-    # 数据操作
-    # ═══════════════════════════════════════════════════════════
+    def _edit_dialog(self, idx):
+        acc = self.db["accounts"][idx]
+        try: cur_pwd = self.crypto.decrypt(acc["password"])
+        except Exception: messagebox.showerror("错误", "解密失败！"); return
+
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("修改账号")
+        dialog.geometry("500x520")
+        dialog.configure(fg_color=COLORS["bg_deep"])
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.resizable(False, False)
+
+        card = GlassFrame(dialog)
+        card.pack(fill="both", expand=True, padx=20, pady=20)
+        inner = ctk.CTkFrame(card, fg_color="transparent")
+        inner.pack(fill="both", expand=True, padx=32, pady=24)
+
+        ctk.CTkLabel(inner, text="修改账号凭证", font=ctk.CTkFont(family=APP_FONT, size=18, weight="bold"), text_color=COLORS["text_primary"]).pack(anchor="w", pady=(0, 20))
+
+        ctk.CTkLabel(inner, text="平台名称", font=ctk.CTkFont(family=APP_FONT, size=13), text_color=COLORS["text_secondary"]).pack(anchor="w")
+        e_title = StyledEntry(inner, width=400, height=40, font=ctk.CTkFont(family=APP_FONT, size=14))
+        e_title.insert(0, acc["title"])
+        e_title.pack(pady=(4, 12))
+
+        ctk.CTkLabel(inner, text="账号 / 邮箱", font=ctk.CTkFont(family=APP_FONT, size=13), text_color=COLORS["text_secondary"]).pack(anchor="w")
+        e_user = StyledEntry(inner, width=400, height=40, font=ctk.CTkFont(family=APP_FONT, size=14))
+        e_user.insert(0, acc["username"])
+        e_user.pack(pady=(4, 12))
+
+        ctk.CTkLabel(inner, text="密码", font=ctk.CTkFont(family=APP_FONT, size=13), text_color=COLORS["text_secondary"]).pack(anchor="w")
+        e_pwd = StyledEntry(inner, width=400, height=40, font=ctk.CTkFont(family=APP_FONT, size=14), show="●")
+        e_pwd.insert(0, cur_pwd)
+        e_pwd.pack(pady=(4, 12))
+
+        ctk.CTkLabel(inner, text="账号分类归属", font=ctk.CTkFont(family=APP_FONT, size=13), text_color=COLORS["text_secondary"]).pack(anchor="w")
+        cat_options = self.db.get("categories", ["默认"])
+        e_cat_menu = ctk.CTkOptionMenu(inner, width=400, height=40, values=cat_options, font=ctk.CTkFont(family=APP_FONT, size=13), fg_color=COLORS["bg_input"], button_color=COLORS["bg_btn_sec"], button_hover_color=COLORS["bg_card_hover"], dropdown_fg_color=COLORS["bg_card"], dropdown_font=ctk.CTkFont(family=APP_FONT, size=13), text_color=COLORS["text_primary"])
+        e_cat_menu.pack(pady=(4, 20))
+        e_cat_menu.set(acc.get("category", "默认"))
+
+        def save():
+            vals = [e_title.get().strip(), e_user.get().strip(), e_pwd.get().strip(), e_cat_menu.get()]
+            if not all(vals[:3]): return
+            self.db["accounts"][idx]["title"], self.db["accounts"][idx]["username"] = vals[0], vals[1]
+            self.db["accounts"][idx]["password"] = self.crypto.encrypt(vals[2])
+            self.db["accounts"][idx]["category"] = vals[3]
+            self._save_db()
+            self._render_sidebar_menu()
+            self._refresh_list()
+            vals[2] = cur_pwd = None
+            del vals, cur_pwd
+            gc.collect()
+            dialog.destroy()
+
+        GradientButton(inner, text="💾  保存修改", width=400, height=42, font=ctk.CTkFont(family=APP_FONT, size=14, weight="bold"), command=save).pack(fill="x")
+
     def _load_db(self) -> bool:
         if os.path.exists(DATA_FILE):
-            with open(DATA_FILE, 'r', encoding='utf-8') as f:
-                self.db = json.load(f)
+            with open(DATA_FILE, 'r', encoding='utf-8') as f: self.db = json.load(f)
             return True
         return False
 
     def _save_db(self):
-        with open(DATA_FILE, 'w', encoding='utf-8') as f:
-            json.dump(self.db, f, indent=4, ensure_ascii=False)
+        with open(DATA_FILE, 'w', encoding='utf-8') as f: json.dump(self.db, f, indent=4, ensure_ascii=False)
 
-    def _login(self, is_first_time: bool):
-        master_pwd = self.pwd_entry.get()
-        if not master_pwd:
-            messagebox.showwarning("提示", "密码不能为空！")
-            return
-
-        if is_first_time:
-            salt = os.urandom(16)
-            self.db["salt"] = base64.b64encode(salt).decode()
-            self.crypto.derive_and_set_key(master_pwd, salt)
-            self.db["verify_token"] = self.crypto.encrypt("AUTH_SUCCESS")
-
-            recovery_key = "RM-" + os.urandom(6).hex().upper()
-            recovery_salt = os.urandom(16)
-            self.db["recovery_salt"] = base64.b64encode(recovery_salt).decode()
-            rec_enc_key = self.crypto.get_key_from_pwd(recovery_key, recovery_salt)
-            f_rec = Fernet(rec_enc_key)
-            self.db["recovery_payload"] = f_rec.encrypt(self.crypto.key).decode()
-            self._save_db()
-
-            msg = (f"初始化成功！\n\n【重要】你的安全恢复码是：\n"
-                   f"{recovery_key}\n\n"
-                   f"这是忘记主密码时的唯一找回凭证，请妥善保存！")
-            messagebox.showwarning("⚠️ 请立刻备份恢复码", msg)
-            self.unbind("<Return>")
-            self.setup_main_ui()
-        else:
-            salt = base64.b64decode(self.db.get("salt", ""))
-            self.crypto.derive_and_set_key(master_pwd, salt)
-            try:
-                if self.crypto.decrypt(self.db.get("verify_token", "")) == "AUTH_SUCCESS":
-                    self.unbind("<Return>")
-                    self.setup_main_ui()
-                else:
-                    raise InvalidToken
-            except Exception:
-                messagebox.showerror("错误", "密码错误，拒绝访问！")
-                self.pwd_entry.delete(0, "end")
-
-    def _lock(self):
-        self.crypto = CryptoCore()
-        self.setup_login_ui()
-
-    def _recover_password(self):
-        rec_key = simpledialog.askstring("恢复密码", "请输入以 RM- 开头的安全恢复码：",
-                                         parent=self)
-        if not rec_key:
-            return
-        new_pwd = simpledialog.askstring("重置密码", "请输入新的主密码：",
-                                         parent=self, show="*")
-        if not new_pwd:
-            return
+    def _recover_password(self, login_win):
+        rec_dialog = CustomPasswordDialog(login_win, "安全验证", "请输入安全恢复码：")
+        rec_key = rec_dialog.result
+        if not rec_key: return
+        
+        new_pwd_dialog = CustomPasswordDialog(login_win, "重置密码", "请输入全新的主密码：")
+        new_pwd = new_pwd_dialog.result
+        if not new_pwd: return
+        
         try:
             recovery_salt = base64.b64decode(self.db.get("recovery_salt", ""))
             rec_enc_key = self.crypto.get_key_from_pwd(rec_key, recovery_salt)
-            f_rec = Fernet(rec_enc_key)
-            old_master_key = f_rec.decrypt(self.db.get("recovery_payload", "").encode())
+            old_master_key = Fernet(rec_enc_key).decrypt(self.db.get("recovery_payload", "").encode())
             old_fernet = Fernet(old_master_key)
 
-            decrypted = []
-            for acc in self.db["accounts"]:
-                decrypted.append({
-                    "title": acc["title"], "username": acc["username"],
-                    "password": old_fernet.decrypt(acc["password"].encode()).decode()
-                })
-
+            decrypted = [{"title": a["title"], "username": a["username"], "password": old_fernet.decrypt(a["password"].encode()).decode(), "category": a.get("category", "默认")} for a in self.db["accounts"]]
+            
             new_salt = os.urandom(16)
             self.db["salt"] = base64.b64encode(new_salt).decode()
+            
             self.crypto.derive_and_set_key(new_pwd, new_salt)
             self.db["verify_token"] = self.crypto.encrypt("AUTH_SUCCESS")
-            self.db["accounts"] = [
-                {"title": a["title"], "username": a["username"],
-                 "password": self.crypto.encrypt(a["password"])}
-                for a in decrypted
-            ]
+            self.db["accounts"] = [{"title": a["title"], "username": a["username"], "password": self.crypto.encrypt(a["password"]), "category": a["category"]} for a in decrypted]
 
-            # 用新恢复码重新生成 payload
             new_recovery_key = "RM-" + os.urandom(6).hex().upper()
             new_recovery_salt = os.urandom(16)
             self.db["recovery_salt"] = base64.b64encode(new_recovery_salt).decode()
-            new_rec_enc_key = self.crypto.get_key_from_pwd(new_recovery_key, new_recovery_salt)
-            f_new_rec = Fernet(new_rec_enc_key)
+            f_new_rec = Fernet(self.crypto.get_key_from_pwd(new_recovery_key, new_recovery_salt))
             self.db["recovery_payload"] = f_new_rec.encrypt(self.crypto.key).decode()
             self._save_db()
 
-            messagebox.showinfo("成功",
-                                f"密码重置成功！\n\n新恢复码：{new_recovery_key}\n请重新备份。")
-            self.setup_login_ui()
-        except Exception:
+            try:
+                with open("安全恢复码备份.txt", "w", encoding="utf-8") as f:
+                    f.write(f"你的安全恢复码是：{new_recovery_key}\n请妥善保管，切勿泄露给他人。")
+                extra_msg = f"\n\n新恢复码已同步写入到【安全恢复码备份.txt】中！"
+            except Exception: extra_msg = ""
+
+            messagebox.showinfo("成功", f"密码重置成功！\n\n新恢复码：{new_recovery_key}\n请立刻核对备份。{extra_msg}")
+            
+            new_pwd = rec_key = old_master_key = None
+            del new_pwd, rec_key, old_master_key
+            gc.collect()
+            
+            login_win.destroy()
+            LoginWindow(self)
+        except Exception: 
             messagebox.showerror("错误", "恢复码不正确或数据已损坏！")
+            new_pwd = rec_key = None
+            del new_pwd, rec_key
+            gc.collect()
 
     def _refresh_list(self, keyword=""):
-        for w in self.list_scroll.winfo_children():
-            w.destroy()
+        for w in self.list_scroll.winfo_children(): w.destroy()
         self._rows.clear()
-        self.selected_idx = None
-
+        
         for idx, acc in enumerate(self.db["accounts"]):
-            if keyword and keyword.lower() not in acc["title"].lower() \
-                       and keyword.lower() not in acc["username"].lower():
-                continue
-            row = AccountRow(
-                self.list_scroll, acc, idx,
-                on_select=self._select_row,
-                on_copy=self._copy_password,
-                on_view=self._view_password_dialog,
-                on_edit=self._edit_dialog,
-                on_delete=self._delete_account,
-            )
+            if self.current_filter_category != "全部" and acc.get("category", "默认") != self.current_filter_category: continue
+            if keyword and keyword.lower() not in acc["title"].lower() and keyword.lower() not in acc["username"].lower(): continue
+                
+            row = AccountRow(self.list_scroll, acc, idx, on_select=self._select_row, on_view=self._view_password_dialog, on_edit=self._edit_dialog, on_delete=self._delete_account)
             row.pack(fill="x", pady=4)
             self._rows.append(row)
-
-        if not self.db["accounts"]:
-            ctk.CTkLabel(self.list_scroll,
-                         text="还没有任何账号，点击右上角「添加账号」开始吧 ✨",
-                         font=ctk.CTkFont(size=13),
-                         text_color=COLORS["text_muted"]).pack(pady=40)
+            
+        if not self._rows:
+            ctk.CTkLabel(self.list_scroll, text="该分类下空空如也 📭", font=ctk.CTkFont(family=APP_FONT, size=13), text_color=COLORS["text_muted"]).pack(pady=40)
 
     def _select_row(self, idx):
-        for row in self._rows:
-            row.set_selected(row.idx == idx)
-        self.selected_idx = idx
-
-    def _copy_password(self, idx):
-        try:
-            pwd = self.crypto.decrypt(self.db["accounts"][idx]["password"])
-            self.clipboard_clear()
-            self.clipboard_append(pwd)
-        except Exception:
-            messagebox.showerror("错误", "复制失败！")
-
-    def _add_account(self):
-        result = self._show_dialog("添加账号", [
-            ("平台名称", "e.g. Google", None),
-            ("账号 / 邮箱", "e.g. user@example.com", None),
-            ("密码", "输入密码", "●"),
-        ])
-        if not result:
-            return
-        keys = list(result.keys())
-        self.db["accounts"].append({
-            "title": result[keys[0]],
-            "username": result[keys[1]],
-            "password": self.crypto.encrypt(result[keys[2]])
-        })
-        self._save_db()
-        self._refresh_list(getattr(self, "search_var", ctk.StringVar()).get())
+        for row in self._rows: row.set_selected(row.idx == idx)
 
     def _delete_account(self, idx):
-        acc = self.db["accounts"][idx]
-        if messagebox.askyesno("确认删除",
-                               f"确定要删除「{acc['title']}」的账号吗？\n此操作不可撤销。"):
+        if messagebox.askyesno("确认删除", f"确定要删除「{self.db['accounts'][idx]['title']}」的账号吗？"):
             del self.db["accounts"][idx]
             self._save_db()
+            self._render_sidebar_menu()
             self._refresh_list()
 
-    def _on_search(self, *args):
-        self._refresh_list(self.search_var.get())
+    def _on_search(self, *args): self._refresh_list(self.search_var.get())
 
-    def _clear(self):
-        for w in self.winfo_children():
-            w.destroy()
-
-
-# ── 入口 ─────────────────────────────────────────────────────
 if __name__ == "__main__":
     app = PasswordManagerApp()
     app.mainloop()
