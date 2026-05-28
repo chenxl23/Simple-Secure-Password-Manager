@@ -1,0 +1,10 @@
+# 忽略本地密码数据库
+my_passwords.json
+
+# 忽略 Python 缓存
+__pycache__/
+*.pyc
+
+# 忽略系统文件
+.DS_Store
+Thumbs.db
