@@ -23,6 +23,7 @@
 ```bash
 pip install cryptography customtkinter
 python password_manager.py
+```
 
 ## 📂 项目文件结构
 - `password_manager.py`: 核心程序源码
